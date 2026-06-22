@@ -19,6 +19,7 @@ export default [
         process: 'readonly',
         Buffer: 'readonly',
         setTimeout: 'readonly',
+        clearTimeout: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
         describe: 'readonly',

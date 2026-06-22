@@ -5,3 +5,10 @@ dist/
 .DS_Store
 Thumbs.db
 pkg/
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.vs/
