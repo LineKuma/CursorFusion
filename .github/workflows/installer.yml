@@ -45,7 +45,9 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
           else
             VERSION="${GITHUB_REF#refs/tags/}"
-            if [ "$VERSION" = "" ]; then
+            # If GITHUB_REF was not a tag (e.g. workflow_dispatch on branch),
+            # VERSION will be "refs/heads/branch" — fall back to package.json
+            if echo "$VERSION" | grep -q "^refs/" || [ "$VERSION" = "" ]; then
               VERSION="v$(node -p "require('./package.json').version")"
             fi
           fi
@@ -118,11 +120,11 @@ jobs:
         run: |
           NSIS_VER="${{ needs.version.outputs.nsis_version }}"
           # 提取主版本号部分（用于 VIProductVersion，格式为 X.Y.Z.W）
-          MAIN_VER=$(echo "$NSIS_VER" | sed -E 's/-.*//; s/^([0-9]+\.[0-9]+\.[0-9]+).*/\1.0/')
+          MAIN_VER=$(echo "$NSIS_VER" | sed -E 's|-.*||; s|^([0-9]+\.[0-9]+\.[0-9]+).*|\1.0|')
 
-          sed -i "s/VIPRODUCT_VERSION \"[^\"]*\"/VIPRODUCT_VERSION \"$MAIN_VER\"/" installer.nsi
-          sed -i "s/VIAddVersionKey \"FileVersion\" \"[^\"]*\"/VIAddVersionKey \"FileVersion\" \"$NSIS_VER\"/" installer.nsi
-          sed -i "s/OutFile \"[^\"]*\"/OutFile \"CursorFusion-${NSIS_VER}-Setup.exe\"/" installer.nsi
+          sed -i "s|VIPRODUCT_VERSION \"[^\"]*\"|VIPRODUCT_VERSION \"$MAIN_VER\"|" installer.nsi
+          sed -i "s|VIAddVersionKey \"FileVersion\" \"[^\"]*\"|VIAddVersionKey \"FileVersion\" \"$NSIS_VER\"|" installer.nsi
+          sed -i "s|OutFile \"[^\"]*\"|OutFile \"CursorFusion-${NSIS_VER}-Setup.exe\"|" installer.nsi
           sed -i "s|Name \"[^\"]*\"|Name \"CursorFusion ${NSIS_VER}\"|" installer.nsi
 
           echo "Injected NSIS version: $NSIS_VER (product: $MAIN_VER)"
