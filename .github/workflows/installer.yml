@@ -16,6 +16,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
+  DOTNET_VERSION: "8.0.x"
 
 jobs:
   # ============================================
@@ -108,11 +109,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Build project
-        run: npm run build
+      - name: Publish .NET app
+        run: dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:UseAppHost=true --output build/
 
       # 将版本号注入 installer.nsi
       - name: Inject version into NSIS script
@@ -180,11 +183,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Build project
-        run: npm run build
+      - name: Publish .NET app
+        run: dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj --configuration Release --runtime linux-x64 --self-contained true -p:UseAppHost=true --output build/
 
       # 安装打包工具
       - name: Install packaging tools
@@ -202,17 +207,13 @@ jobs:
           mkdir -p "$DEB_DIR/usr/share/applications"
           mkdir -p "$DEB_DIR/usr/share/icons/hicolor/256x256/apps"
 
-          # 复制构建产物
-          cp -r dist/* "$DEB_DIR/opt/cursorfusion/" 2>/dev/null || true
-          cp -r build/* "$DEB_DIR/opt/cursorfusion/" 2>/dev/null || true
-          cp -r src/* "$DEB_DIR/opt/cursorfusion/" 2>/dev/null || true
-          cp package.json "$DEB_DIR/opt/cursorfusion/"
+          # 复制 .NET 发布产物
+          cp -r build/* "$DEB_DIR/opt/cursorfusion/"
 
           # 创建启动脚本
           cat > "$DEB_DIR/usr/bin/cursorfusion" << 'LAUNCHER'
           #!/bin/bash
-          cd /opt/cursorfusion
-          exec node /opt/cursorfusion/index.js "$@"
+          exec /opt/cursorfusion/CursorFusion.App "$@"
           LAUNCHER
           chmod +x "$DEB_DIR/usr/bin/cursorfusion"
 
@@ -240,7 +241,7 @@ jobs:
           Section: devel
           Priority: optional
           Architecture: amd64
-          Depends: nodejs (>= 18), libnss3, libatk-bridge2.0-0, libdrm2, libxkbcommon0, libgbm1, libasound2
+          Depends: libnss3, libatk-bridge2.0-0, libdrm2, libxkbcommon0, libgbm1, libasound2
           Maintainer: LineCatOvO <${{ github.actor }}@users.noreply.github.com>
           Description: ${PKG_DESC}
            CursorFusion - A modern development tool.
@@ -298,11 +299,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Build project
-        run: npm run build
+      - name: Publish .NET app
+        run: dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj --configuration Release --runtime linux-x64 --self-contained true -p:UseAppHost=true --output build/
 
       - name: Install packaging tools
         run: |
@@ -315,14 +318,11 @@ jobs:
           mkdir -p pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion
           mkdir -p pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/usr/bin
 
-          cp -r dist/* pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/ 2>/dev/null || true
-          cp -r build/* pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/ 2>/dev/null || true
-          cp package.json pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/
+          cp -r build/* pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/
 
           cat > pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/usr/bin/cursorfusion << 'LAUNCHER'
           #!/bin/bash
-          cd /opt/cursorfusion
-          exec node /opt/cursorfusion/index.js "$@"
+          exec /opt/cursorfusion/CursorFusion.App "$@"
           LAUNCHER
           chmod +x pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/usr/bin/cursorfusion
 
@@ -342,7 +342,7 @@ jobs:
           URL:            https://github.com/${{ github.repository }}
           Source0:        cursorfusion-%{version}.tar.gz
 
-          Requires:       nodejs >= 18
+          Requires:       libicu
 
           %description
           ${PKG_DESC}

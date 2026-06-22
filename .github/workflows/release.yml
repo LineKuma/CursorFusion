@@ -17,6 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
+  DOTNET_VERSION: "8.0.x"
 
 jobs:
   # ============================================
@@ -86,13 +87,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Build project
-        run: npm run build
+      - name: Publish .NET app
+        run: dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj --configuration Release --output dist/ --self-contained true -p:UseAppHost=true
 
       - name: Package artifacts
         run: |
@@ -180,43 +182,35 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: linux-x64
-            ext: ""
+            rid: linux-x64
           - os: macos-latest
-            target: darwin-x64
-            ext: ""
+            rid: osx-x64
           - os: macos-latest
-            target: darwin-arm64
-            ext: ""
+            rid: osx-arm64
           - os: windows-latest
-            target: win32-x64
-            ext: ".exe"
+            rid: win-x64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build binaries
-        run: npm run pkg -- --targets ${{ matrix.target }} --output cursorfusion${{ matrix.ext }}
+      - name: Publish
+        run: dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj --configuration Release --runtime ${{ matrix.rid }} --self-contained true -p:UseAppHost=true --output dist/
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cursorfusion-${{ needs.version.outputs.version_no_v }}-${{ matrix.target }}
-          path: cursorfusion${{ matrix.ext }}
+          name: cursorfusion-${{ needs.version.outputs.version_no_v }}-${{ matrix.rid }}
+          path: dist/
 
       - name: Upload binary to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: cursorfusion${{ matrix.ext }}
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
