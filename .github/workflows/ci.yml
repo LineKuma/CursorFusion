@@ -225,6 +225,9 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Restore
+        run: dotnet restore src/core/mouse/cs/CursorFusion.Mouse.Tests/CursorFusion.Mouse.Tests.csproj
+
       - name: Test
         run: dotnet test src/core/mouse/cs/CursorFusion.Mouse.Tests/CursorFusion.Mouse.Tests.csproj --no-restore --verbosity normal
 
