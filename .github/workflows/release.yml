@@ -16,7 +16,7 @@ permissions:
   packages: write
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
 
 jobs:
   # ============================================
@@ -255,7 +255,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=${{ needs.version.outputs.is_prerelease == 'true' && format('{0}-{1}', needs.version.outputs.stability, needs.version.outputs.version_no_v) || needs.version.outputs.version_no_v }},enable=${{ needs.version.outputs.is_prerelease == 'true' }}
+            type=raw,value=${{ needs.version.outputs.is_prerelease == 'true' && needs.version.outputs.version_no_v || '' }},enable=${{ needs.version.outputs.is_prerelease == 'true' }}
             type=sha,prefix=
 
       - name: Build and push Docker image
