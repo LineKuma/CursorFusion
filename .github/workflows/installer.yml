@@ -144,7 +144,6 @@ jobs:
           path: |
             CursorFusion-*-Setup.exe
             *.exe
-          if-no-files-found: warn
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -154,7 +153,6 @@ jobs:
             *.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if-no-files-found: ignore
 
   # ============================================
   # Debian DEB 包
@@ -375,7 +373,6 @@ jobs:
         with:
           name: cursorfusion-${{ needs.version.outputs.version_no_v }}.x86_64.rpm
           path: cursorfusion-*.rpm
-          if-no-files-found: warn
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -383,4 +380,3 @@ jobs:
           files: cursorfusion-*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if-no-files-found: ignore
