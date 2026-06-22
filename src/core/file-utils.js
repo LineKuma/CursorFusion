@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 class FileUtils {
   /**
@@ -14,7 +14,9 @@ class FileUtils {
 
       let entries;
       try {
-        entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+        entries = await fs.promises.readdir(currentDir, {
+          withFileTypes: true,
+        });
       } catch {
         return;
       }
@@ -23,12 +25,14 @@ class FileUtils {
         const fullPath = path.join(currentDir, entry.name);
 
         // 检查忽略模式
-        if (ignorePatterns.some(pattern => fullPath.includes(pattern))) continue;
+        if (ignorePatterns.some((pattern) => fullPath.includes(pattern)))
+          continue;
 
         if (entry.isDirectory()) {
           await walkInternal(fullPath, depth + 1);
         } else if (entry.isFile()) {
-          if (extensions && !extensions.includes(path.extname(entry.name))) continue;
+          if (extensions && !extensions.includes(path.extname(entry.name)))
+            continue;
           results.push(fullPath);
         }
       }
@@ -53,13 +57,13 @@ class FileUtils {
     await this.ensureDir(dir);
 
     if (options.backup && fs.existsSync(filePath)) {
-      await fs.promises.copyFile(filePath, filePath + '.bak');
+      await fs.promises.copyFile(filePath, filePath + ".bak");
     }
 
     await fs.promises.writeFile(
       filePath,
-      typeof content === 'string' ? content : JSON.stringify(content, null, 2),
-      options.encoding || 'utf-8'
+      typeof content === "string" ? content : JSON.stringify(content, null, 2),
+      options.encoding || "utf-8",
     );
   }
 
@@ -67,7 +71,7 @@ class FileUtils {
    * 读取 JSON 文件
    */
   readJson(filePath) {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, "utf-8");
     return JSON.parse(content);
   }
 
@@ -114,21 +118,21 @@ class FileUtils {
   detectType(filePath) {
     const ext = path.extname(filePath).toLowerCase();
     const types = {
-      '.js': 'javascript',
-      '.ts': 'typescript',
-      '.jsx': 'jsx',
-      '.tsx': 'tsx',
-      '.json': 'json',
-      '.md': 'markdown',
-      '.yml': 'yaml',
-      '.yaml': 'yaml',
-      '.html': 'html',
-      '.css': 'css',
-      '.py': 'python',
-      '.go': 'go',
-      '.rs': 'rust',
+      ".js": "javascript",
+      ".ts": "typescript",
+      ".jsx": "jsx",
+      ".tsx": "tsx",
+      ".json": "json",
+      ".md": "markdown",
+      ".yml": "yaml",
+      ".yaml": "yaml",
+      ".html": "html",
+      ".css": "css",
+      ".py": "python",
+      ".go": "go",
+      ".rs": "rust",
     };
-    return types[ext] || 'unknown';
+    return types[ext] || "unknown";
   }
 }
 

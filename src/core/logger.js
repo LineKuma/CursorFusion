@@ -6,10 +6,10 @@ const LEVELS = {
 };
 
 const LEVEL_PREFIXES = {
-  debug: '[DEBUG]',
-  info: '[INFO]',
-  warn: '[WARN]',
-  error: '[ERROR]',
+  debug: "[DEBUG]",
+  info: "[INFO]",
+  warn: "[WARN]",
+  error: "[ERROR]",
 };
 
 class Logger {
@@ -42,10 +42,18 @@ class Logger {
     }
   }
 
-  debug(message, meta) { this._log('debug', message, meta); }
-  info(message, meta) { this._log('info', message, meta); }
-  warn(message, meta) { this._log('warn', message, meta); }
-  error(message, meta) { this._log('error', message, meta); }
+  debug(message, meta) {
+    this._log("debug", message, meta);
+  }
+  info(message, meta) {
+    this._log("info", message, meta);
+  }
+  warn(message, meta) {
+    this._log("warn", message, meta);
+  }
+  error(message, meta) {
+    this._log("error", message, meta);
+  }
 
   getHistory() {
     return [...this.history];
@@ -59,7 +67,9 @@ class Logger {
     if (level in LEVELS) {
       this.level = LEVELS[level];
     } else {
-      throw new Error(`Unknown log level: ${level}. Valid levels: ${Object.keys(LEVELS).join(', ')}`);
+      throw new Error(
+        `Unknown log level: ${level}. Valid levels: ${Object.keys(LEVELS).join(", ")}`,
+      );
     }
   }
 }

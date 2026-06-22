@@ -34,10 +34,10 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint -- --max-warnings=-1
+        run: npm run lint
 
       - name: Check formatting
-        run: npm run format:check --if-present || true
+        run: npm run format:check --if-present
 
   # ============================================
   # 单元测试 (Unit Tests)
@@ -96,8 +96,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run integration tests with coverage
-        run: npm run test:integration -- --config jest.integration.config.js
+      - name: Run integration tests
+        run: npm run test:integration -- --no-coverage
         env:
           CI: true
 

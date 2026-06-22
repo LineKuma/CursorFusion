@@ -1,21 +1,23 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { CursorFusion } = require('../../src/index');
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { CursorFusion } = require("../../src/index");
 
-describe('CursorFusion Integration', () => {
+describe("CursorFusion Integration", () => {
   let tmpDir;
 
   beforeEach(async () => {
-    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'cf-integration-'));
+    tmpDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "cf-integration-"),
+    );
   });
 
   afterEach(async () => {
     await fs.promises.rm(tmpDir, { recursive: true, force: true });
   });
 
-  describe('full initialization flow', () => {
-    it('should complete init → getVersion → getConfig flow', async () => {
+  describe("full initialization flow", () => {
+    it("should complete init → getVersion → getConfig flow", async () => {
       const cf = new CursorFusion({ silent: true });
 
       // 初始化
@@ -25,7 +27,7 @@ describe('CursorFusion Integration', () => {
       // 获取版本
       const version = cf.getVersion();
       expect(version).toBeTruthy();
-      expect(typeof version).toBe('string');
+      expect(typeof version).toBe("string");
 
       // 获取配置
       const config = cf.getConfig();
@@ -38,19 +40,22 @@ describe('CursorFusion Integration', () => {
       });
     });
 
-    it('should work with custom config file', async () => {
-      const configPath = path.join(tmpDir, '.cursorfusionrc.json');
-      await fs.promises.writeFile(configPath, JSON.stringify({
-        debug: true,
-        maxConcurrentTasks: 16,
-        logLevel: 'debug',
-        customSetting: 'works',
-      }));
+    it("should work with custom config file", async () => {
+      const configPath = path.join(tmpDir, ".cursorfusionrc.json");
+      await fs.promises.writeFile(
+        configPath,
+        JSON.stringify({
+          debug: true,
+          maxConcurrentTasks: 16,
+          logLevel: "debug",
+          customSetting: "works",
+        }),
+      );
 
       const cf = new CursorFusion({
         configPath,
         silent: true,
-        logLevel: 'error',
+        logLevel: "error",
       });
 
       await cf.init();
@@ -58,15 +63,18 @@ describe('CursorFusion Integration', () => {
 
       expect(config.debug).toBe(true);
       expect(config.maxConcurrentTasks).toBe(16);
-      expect(config.customSetting).toBe('works');
+      expect(config.customSetting).toBe("works");
     });
 
-    it('should validate config during init', async () => {
-      const configPath = path.join(tmpDir, 'bad-config.json');
-      await fs.promises.writeFile(configPath, JSON.stringify({
-        maxConcurrentTasks: -5,
-        logLevel: 'invalid-level',
-      }));
+    it("should validate config during init", async () => {
+      const configPath = path.join(tmpDir, "bad-config.json");
+      await fs.promises.writeFile(
+        configPath,
+        JSON.stringify({
+          maxConcurrentTasks: -5,
+          logLevel: "invalid-level",
+        }),
+      );
 
       const cf = new CursorFusion({
         configPath,
@@ -75,7 +83,7 @@ describe('CursorFusion Integration', () => {
 
       // init 应该成功加载（即使配置无效）
       await cf.init();
-      const config = cf.getConfig();
+      cf.getConfig();
 
       // 验证应能检测到错误
       const validation = cf.config.validate();
@@ -84,20 +92,20 @@ describe('CursorFusion Integration', () => {
     });
   });
 
-  describe('logging integration', () => {
+  describe("logging integration", () => {
     // 抑制 console 输出
     let consoleSpy;
     beforeEach(() => {
-      consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
     });
     afterEach(() => {
       consoleSpy.mockRestore();
     });
 
-    it('should collect logs across the full lifecycle', async () => {
+    it("should collect logs across the full lifecycle", async () => {
       // 不使用 silent，用 consoleSpy 抑制输出，确保 history 正常记录
       const cf = new CursorFusion({
-        logLevel: 'debug',
+        logLevel: "debug",
       });
 
       await cf.init();
@@ -108,30 +116,30 @@ describe('CursorFusion Integration', () => {
       expect(history.length).toBeGreaterThan(0);
 
       // 应该有至少一条 info 级别的日志（来自 init）
-      const infoLogs = history.filter(h => h.level === 'info');
+      const infoLogs = history.filter((h) => h.level === "info");
       expect(infoLogs.length).toBeGreaterThan(0);
     });
 
-    it('should support changing log level mid-session', async () => {
+    it("should support changing log level mid-session", async () => {
       const cf = new CursorFusion({
-        logLevel: 'error',
+        logLevel: "error",
       });
 
       await cf.init();
       // 切换到 debug 后，后续日志应被记录
-      cf.logger.setLevel('debug');
-      cf.logger.debug('now visible');
+      cf.logger.setLevel("debug");
+      cf.logger.debug("now visible");
 
       const history = cf.logger.getHistory();
-      const debugLogs = history.filter(h => h.level === 'debug');
+      const debugLogs = history.filter((h) => h.level === "debug");
       expect(debugLogs).toContainEqual(
-        expect.objectContaining({ message: 'now visible' })
+        expect.objectContaining({ message: "now visible" }),
       );
     });
   });
 
-  describe('version integration', () => {
-    it('should detect prerelease status consistently', async () => {
+  describe("version integration", () => {
+    it("should detect prerelease status consistently", async () => {
       const cf = new CursorFusion({ silent: true });
       await cf.init();
 
@@ -146,48 +154,50 @@ describe('CursorFusion Integration', () => {
       }
     });
 
-    it('should compare against known versions', async () => {
+    it("should compare against known versions", async () => {
       const cf = new CursorFusion({ silent: true });
       await cf.init();
 
       const currentVersion = cf.getVersion();
       // 当前版本应该 >= 0.0.0
-      expect(cf.version.compare('0.0.0')).toBeGreaterThanOrEqual(0);
+      expect(cf.version.compare("0.0.0")).toBeGreaterThanOrEqual(0);
       // 应该满足 ^0.x 或 ^1.x 等
-      expect(cf.version.satisfies(`^${currentVersion.split('.')[0]}.0.0`)).toBe(true);
+      expect(cf.version.satisfies(`^${currentVersion.split(".")[0]}.0.0`)).toBe(
+        true,
+      );
     });
   });
 
-  describe('file operations integration', () => {
-    it('should walk, write, and read files end-to-end', async () => {
+  describe("file operations integration", () => {
+    it("should walk, write, and read files end-to-end", async () => {
       const cf = new CursorFusion({ silent: true });
       await cf.init();
 
       // 创建临时工作目录
-      const workDir = path.join(tmpDir, 'project');
+      const workDir = path.join(tmpDir, "project");
       await cf.fileUtils.ensureDir(workDir);
 
       // 写入文件
       await cf.fileUtils.writeFile(
-        path.join(workDir, 'src/main.js'),
-        "console.log('hello');"
+        path.join(workDir, "src/main.js"),
+        "console.log('hello');",
       );
       await cf.fileUtils.writeFile(
-        path.join(workDir, 'src/utils/helper.js'),
-        "export function helper() {}"
+        path.join(workDir, "src/utils/helper.js"),
+        "export function helper() {}",
       );
       await cf.fileUtils.writeFile(
-        path.join(workDir, 'package.json'),
-        '{"name": "test"}'
+        path.join(workDir, "package.json"),
+        '{"name": "test"}',
       );
 
       // 遍历目录
-      const jsFiles = await cf.fileUtils.walk(workDir, { extensions: ['.js'] });
+      const jsFiles = await cf.fileUtils.walk(workDir, { extensions: [".js"] });
       expect(jsFiles).toHaveLength(2);
 
       // 读取 JSON
-      const pkg = cf.fileUtils.readJson(path.join(workDir, 'package.json'));
-      expect(pkg.name).toBe('test');
+      const pkg = cf.fileUtils.readJson(path.join(workDir, "package.json"));
+      expect(pkg.name).toBe("test");
 
       // 清理并验证
       await cf.fileUtils.cleanDir(workDir);
@@ -195,23 +205,23 @@ describe('CursorFusion Integration', () => {
       expect(remaining).toHaveLength(0);
     });
 
-    it('should detect file types correctly across project', async () => {
+    it("should detect file types correctly across project", async () => {
       const cf = new CursorFusion({ silent: true });
       await cf.init();
 
-      const workDir = path.join(tmpDir, 'mixed-project');
+      const workDir = path.join(tmpDir, "mixed-project");
       await cf.fileUtils.ensureDir(workDir);
 
       const files = {
-        'app.ts': 'typescript',
-        'index.html': 'html',
-        'style.css': 'css',
-        'script.py': 'python',
-        'main.go': 'go',
-        'lib.rs': 'rust',
-        'data.yml': 'yaml',
-        'readme.md': 'markdown',
-        'config.json': 'json',
+        "app.ts": "typescript",
+        "index.html": "html",
+        "style.css": "css",
+        "script.py": "python",
+        "main.go": "go",
+        "lib.rs": "rust",
+        "data.yml": "yaml",
+        "readme.md": "markdown",
+        "config.json": "json",
       };
 
       for (const [filename, expectedType] of Object.entries(files)) {
@@ -220,10 +230,10 @@ describe('CursorFusion Integration', () => {
     });
   });
 
-  describe('error handling integration', () => {
-    it('should handle missing config gracefully', async () => {
+  describe("error handling integration", () => {
+    it("should handle missing config gracefully", async () => {
       const cf = new CursorFusion({
-        configPath: '/definitely/not/a/real/path.json',
+        configPath: "/definitely/not/a/real/path.json",
         silent: true,
       });
 
@@ -232,9 +242,9 @@ describe('CursorFusion Integration', () => {
       expect(cf.getVersion()).toBeTruthy();
     });
 
-    it('should handle corrupted config file', async () => {
-      const badConfigPath = path.join(tmpDir, 'corrupted.json');
-      await fs.promises.writeFile(badConfigPath, '{{{not valid json}}}');
+    it("should handle corrupted config file", async () => {
+      const badConfigPath = path.join(tmpDir, "corrupted.json");
+      await fs.promises.writeFile(badConfigPath, "{{{not valid json}}}");
 
       const cf = new CursorFusion({
         configPath: badConfigPath,
@@ -246,21 +256,21 @@ describe('CursorFusion Integration', () => {
         await cf.init();
         // 如果没抛错，说明有容错逻辑
       } catch (e) {
-        expect(e.message).toContain('Invalid JSON');
+        expect(e.message).toContain("Invalid JSON");
       }
     });
   });
 
-  describe('config round-trip', () => {
-    it('should survive set → get → reset cycle', async () => {
+  describe("config round-trip", () => {
+    it("should survive set → get → reset cycle", async () => {
       const cf = new CursorFusion({ silent: true });
       await cf.init();
 
       const original = cf.getConfig();
 
       // 修改
-      cf.config.set('debug', true);
-      cf.config.set('timeout', 99999);
+      cf.config.set("debug", true);
+      cf.config.set("timeout", 99999);
       expect(cf.getConfig().debug).toBe(true);
 
       // 重置
@@ -269,7 +279,7 @@ describe('CursorFusion Integration', () => {
       expect(restored).toEqual(original);
     });
 
-    it('should validate before and after modification', async () => {
+    it("should validate before and after modification", async () => {
       const cf = new CursorFusion({ silent: true });
       await cf.init();
 
@@ -277,11 +287,11 @@ describe('CursorFusion Integration', () => {
       expect(cf.config.validate().valid).toBe(true);
 
       // 注入无效值后应失败
-      cf.config.set('maxConcurrentTasks', 'oops');
+      cf.config.set("maxConcurrentTasks", "oops");
       expect(cf.config.validate().valid).toBe(false);
 
       // 修复后恢复有效
-      cf.config.set('maxConcurrentTasks', 4);
+      cf.config.set("maxConcurrentTasks", 4);
       expect(cf.config.validate().valid).toBe(true);
     });
   });

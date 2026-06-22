@@ -1,13 +1,13 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 const DEFAULT_CONFIG = {
   debug: false,
-  outputDir: './output',
+  outputDir: "./output",
   maxConcurrentTasks: 4,
   timeout: 30000,
   retryCount: 3,
-  logLevel: 'info',
+  logLevel: "info",
 };
 
 class ConfigManager {
@@ -21,9 +21,9 @@ class ConfigManager {
     if (!this.configPath) {
       // 尝试默认路径
       const defaultPaths = [
-        path.join(process.cwd(), '.cursorfusionrc.json'),
-        path.join(process.cwd(), '.cursorfusionrc.js'),
-        path.join(process.cwd(), 'cursorfusion.config.json'),
+        path.join(process.cwd(), ".cursorfusionrc.json"),
+        path.join(process.cwd(), ".cursorfusionrc.js"),
+        path.join(process.cwd(), "cursorfusion.config.json"),
       ];
 
       for (const p of defaultPaths) {
@@ -35,17 +35,17 @@ class ConfigManager {
     }
 
     if (this.configPath && fs.existsSync(this.configPath)) {
-      const raw = fs.readFileSync(this.configPath, 'utf-8');
+      const raw = fs.readFileSync(this.configPath, "utf-8");
       const ext = path.extname(this.configPath);
 
-      if (ext === '.json') {
+      if (ext === ".json") {
         try {
           const userConfig = JSON.parse(raw);
           this.config = this._merge(DEFAULT_CONFIG, userConfig);
         } catch (e) {
           throw new Error(`Invalid JSON in ${this.configPath}: ${e.message}`);
         }
-      } else if (ext === '.js') {
+      } else if (ext === ".js") {
         // 简化处理，实际应使用动态 require
         this.config = this._merge(DEFAULT_CONFIG, JSON.parse(raw));
       }
@@ -65,7 +65,7 @@ class ConfigManager {
   }
 
   set(key, value) {
-    if (typeof key === 'object') {
+    if (typeof key === "object") {
       this.config = { ...this.config, ...key };
     } else {
       this.config[key] = value;
@@ -80,10 +80,10 @@ class ConfigManager {
     const result = { ...defaults };
     for (const [key, value] of Object.entries(override)) {
       if (
-        typeof value === 'object' &&
+        typeof value === "object" &&
         value !== null &&
         !Array.isArray(value) &&
-        typeof defaults[key] === 'object'
+        typeof defaults[key] === "object"
       ) {
         result[key] = this._merge(defaults[key], value);
       } else {
@@ -96,21 +96,27 @@ class ConfigManager {
   validate() {
     const errors = [];
 
-    if (typeof this.config.maxConcurrentTasks !== 'number' || this.config.maxConcurrentTasks < 1) {
-      errors.push('maxConcurrentTasks must be a positive number');
+    if (
+      typeof this.config.maxConcurrentTasks !== "number" ||
+      this.config.maxConcurrentTasks < 1
+    ) {
+      errors.push("maxConcurrentTasks must be a positive number");
     }
 
-    if (typeof this.config.timeout !== 'number' || this.config.timeout < 0) {
-      errors.push('timeout must be a non-negative number');
+    if (typeof this.config.timeout !== "number" || this.config.timeout < 0) {
+      errors.push("timeout must be a non-negative number");
     }
 
-    if (typeof this.config.retryCount !== 'number' || this.config.retryCount < 0) {
-      errors.push('retryCount must be a non-negative number');
+    if (
+      typeof this.config.retryCount !== "number" ||
+      this.config.retryCount < 0
+    ) {
+      errors.push("retryCount must be a non-negative number");
     }
 
-    const validLevels = ['debug', 'info', 'warn', 'error'];
+    const validLevels = ["debug", "info", "warn", "error"];
     if (!validLevels.includes(this.config.logLevel)) {
-      errors.push(`logLevel must be one of: ${validLevels.join(', ')}`);
+      errors.push(`logLevel must be one of: ${validLevels.join(", ")}`);
     }
 
     return {
