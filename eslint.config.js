@@ -18,6 +18,7 @@ export default [
         __dirname: 'readonly',
         process: 'readonly',
         Buffer: 'readonly',
+        setTimeout: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
         describe: 'readonly',
