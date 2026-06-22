@@ -97,7 +97,7 @@ jobs:
         run: npm ci
 
       - name: Run integration tests with coverage
-        run: npm run test:integration --
+        run: npm run test:integration -- --config jest.integration.config.js
         env:
           CI: true
 
