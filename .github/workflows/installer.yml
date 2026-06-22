@@ -129,8 +129,12 @@ jobs:
 
           echo "Injected NSIS version: $NSIS_VER (product: $MAIN_VER)"
 
-      # 安装 NSIS 编译器并编译
-      - name: Install NSIS
+      # 安装 NSIS 编译器
+      - name: Install NSIS via Chocolatey
+        run: choco install nsis -y --no-progress
+
+      # 编译 NSIS 安装包
+      - name: Build NSIS installer
         uses: joncloud/makensis-action@v4
         with:
           script-file: installer.nsi
@@ -148,6 +152,7 @@ jobs:
             *.exe
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -267,6 +272,7 @@ jobs:
           path: cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb
@@ -377,6 +383,7 @@ jobs:
           path: cursorfusion-*.rpm
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: cursorfusion-*.rpm
