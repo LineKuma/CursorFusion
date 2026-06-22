@@ -25,12 +25,10 @@ VIAddVersionKey "FileDescription "CursorFusion Installer"
 VIAddVersionKey "FileVersion" "1.0.0.0"
 
 ; ----- MUI 界面定义 -----
-!define MUI_ICON "assets\icon.ico"
-!define MUI_UNICON "assets\icon.ico"
-!define MUI_HEADERIMAGE
-!define MUI_HEADERIMAGE_BITMAP "assets\header.bmp"
-!define MUI_WELCOMEFINISHPAGE_BITMAP "assets\wizard.bmp"
-
+!ifdef MUI_ICONS_EXISTS
+  !define MUI_ICON "assets\icon.ico"
+  !define MUI_UNICON "assets\icon.ico"
+!endif
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY

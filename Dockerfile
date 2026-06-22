@@ -12,8 +12,8 @@ RUN npm run build
 # Production stage
 FROM node:22-alpine AS runner
 
-RUN addgroup -g 1001 cursorfusion \
-    && adduser -u 1001 -G cursorfusion -s /bin/sh -d /app cursorfusion
+RUN addgroup -S -g 1001 cursorfusion \
+    && adduser -S -u 1001 -G cursorfusion -s /bin/sh -d /app cursorfusion
 
 WORKDIR /app
 
