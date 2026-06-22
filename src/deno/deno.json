@@ -1,0 +1,17 @@
+{
+  "name": "@cursorfusion/extensions",
+  "version": "0.1.0",
+  "description": "CursorFusion Deno extension runtime",
+  "tasks": {
+    "run": "deno run --allow-read --allow-write --allow-run --allow-net mod.ts",
+    "test": "deno test --allow-read --allow-write"
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.224.0/"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true
+  }
+}

@@ -188,7 +188,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ============================================
-  # C# 构建 (鼠标追踪核心)
+  # C# 构建 (核心逻辑)
   # ============================================
   dotnet-build:
     name: .NET Build
@@ -204,13 +204,13 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore src/core/mouse/cs/CursorFusion.Mouse/CursorFusion.Mouse.csproj
+        run: dotnet restore src/core/cs/CursorFusion.Core/CursorFusion.Core.csproj
 
       - name: Build
-        run: dotnet build src/core/mouse/cs/CursorFusion.Mouse/CursorFusion.Mouse.csproj --no-restore --configuration Release
+        run: dotnet build src/core/cs/CursorFusion.Core/CursorFusion.Core.csproj --no-restore --configuration Release
 
   # ============================================
-  # C# 测试 (鼠标追踪核心)
+  # C# 测试 (核心逻辑)
   # ============================================
   dotnet-test:
     name: .NET Tests
@@ -226,10 +226,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore src/core/mouse/cs/CursorFusion.Mouse.Tests/CursorFusion.Mouse.Tests.csproj
+        run: dotnet restore src/core/cs/CursorFusion.Core.Tests/CursorFusion.Core.Tests.csproj
 
       - name: Test
-        run: dotnet test src/core/mouse/cs/CursorFusion.Mouse.Tests/CursorFusion.Mouse.Tests.csproj --no-restore --verbosity normal
+        run: dotnet test src/core/cs/CursorFusion.Core.Tests/CursorFusion.Core.Tests.csproj --no-restore --verbosity normal
 
   # ============================================
   # 构建
