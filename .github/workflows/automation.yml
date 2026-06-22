@@ -1,5 +1,10 @@
 name: Issue & PR Automation
 
+# SECURITY NOTE:
+# This workflow uses `pull_request_target` which runs with full repository token (GITHUB_TOKEN).
+# This is intentional to allow labeling PRs from forks and requesting reviews.
+# The script only reads event payload (title, body) for keyword matching —
+# no user-controlled code is executed. All labels, comments, and reviewer names are hardcoded.
 on:
   issues:
     types: [opened, edited, labeled, unlabeled]
