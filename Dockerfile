@@ -1,29 +1,25 @@
-# Multi-stage build for CursorFusion
-FROM node:22-alpine AS builder
+# Multi-stage build for CursorFusion Desktop App
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY src/core/cs/ ./src/core/cs/
 
-COPY . .
-RUN npm run build
+RUN dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj \
+    --configuration Release \
+    --output /app/dist
 
-# Production stage
-FROM node:22-alpine AS runner
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runner
 
 RUN addgroup -S -g 1001 cursorfusion \
     && adduser -S -u 1001 -G cursorfusion -s /bin/sh -d /app cursorfusion
 
 WORKDIR /app
 
-COPY --from=builder --chown=cursorfusion:cursorfusion /app/node_modules ./node_modules
-COPY --from=builder --chown=cursorfusion:cursorfusion /app/dist ./dist
-COPY --from=builder --chown=cursorfusion:cursorfusion /app/package.json ./package.json
+COPY --from=builder --chown=cursorfusion:cursorfusion /app/dist ./
 
 USER cursorfusion
 
-EXPOSE 3000
-
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["./CursorFusion.App"]
 CMD ["--help"]

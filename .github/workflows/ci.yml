@@ -188,7 +188,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ============================================
-  # C# 构建 (核心逻辑)
+  # C# 构建 (核心逻辑 + 桌面应用)
   # ============================================
   dotnet-build:
     name: .NET Build
@@ -204,10 +204,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore src/core/cs/CursorFusion.Core/CursorFusion.Core.csproj
+        run: dotnet restore src/core/cs/CursorFusion.App/CursorFusion.App.csproj
 
       - name: Build
-        run: dotnet build src/core/cs/CursorFusion.Core/CursorFusion.Core.csproj --no-restore --configuration Release
+        run: dotnet build src/core/cs/CursorFusion.App/CursorFusion.App.csproj --no-restore --configuration Release
 
   # ============================================
   # C# 测试 (核心逻辑)
@@ -232,42 +232,12 @@ jobs:
         run: dotnet test src/core/cs/CursorFusion.Core.Tests/CursorFusion.Core.Tests.csproj --no-restore --verbosity normal
 
   # ============================================
-  # 构建
+  # C# 发布 (跨平台)
   # ============================================
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [test-unit, test-integration, test-e2e]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: dist/
-          retention-days: 7
-
-  # ============================================
-  # 跨平台构建验证
-  # ============================================
-  build-matrix:
-    name: Build (${{ matrix.os }})
+  dotnet-publish:
+    name: Publish (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: [test-unit, test-integration, test-e2e]
+    needs: [test-unit, test-integration, test-e2e, dotnet-test]
     strategy:
       fail-fast: false
       matrix:
@@ -276,14 +246,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
+          dotnet-version: "8.0.x"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Publish
+        run: dotnet publish src/core/cs/CursorFusion.App/CursorFusion.App.csproj --configuration Release --output dist/
 
-      - name: Build project
-        run: npm run build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursorfusion-${{ matrix.os }}
+          path: dist/
+          retention-days: 7
