@@ -1,0 +1,386 @@
+name: Build Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 v0.1.0-alpha.1，留空则使用 package.json 版本）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================
+  # 版本解析（共享）
+  # ============================================
+  version:
+    name: Parse Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_no_v: ${{ steps.version.outputs.version_no_v }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      stability: ${{ steps.version.outputs.stability }}
+      deb_version: ${{ steps.version.outputs.deb_version }}
+      rpm_version: ${{ steps.version.outputs.rpm_version }}
+      nsis_version: ${{ steps.version.outputs.nsis_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract & parse version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+            if [ "$VERSION" = "" ]; then
+              VERSION="v$(node -p "require('./package.json').version")"
+            fi
+          fi
+
+          VERSION_NO_V="${VERSION#v}"
+
+          # 判断预发布
+          if echo "$VERSION_NO_V" | grep -qE "(alpha|beta|rc|dev|pre)"; then
+            IS_PRERELEASE="true"
+            STABILITY=$(echo "$VERSION_NO_V" | grep -oE "^(alpha|beta|rc)" | head -1)
+          else
+            IS_PRERELEASE="false"
+            STABILITY="stable"
+          fi
+
+          # DEB: alpha → ~alpha, beta → ~beta, rc → ~rc
+          DEB_VERSION=$(echo "$VERSION_NO_V" | sed 's/-/~/g')
+
+          # RPM: alpha → _alpha, beta → _beta, rc → _rc
+          RPM_VERSION=$(echo "$VERSION_NO_V" | sed 's/-/_/g')
+
+          # NSIS: 去掉 v 前缀，保留原始格式
+          NSIS_VERSION="$VERSION_NO_V"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_no_v=$VERSION_NO_V" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "stability=$STABILITY" >> $GITHUB_OUTPUT
+          echo "deb_version=$DEB_VERSION" >> $GITHUB_OUTPUT
+          echo "rpm_version=$RPM_VERSION" >> $GITHUB_OUTPUT
+          echo "nsis_version=$NSIS_VERSION" >> $GITHUB_OUTPUT
+
+          echo "=== Version Info ==="
+          echo "Version:       $VERSION"
+          echo "No-v:          $VERSION_NO_V"
+          echo "Prerelease:    $IS_PRERELEASE"
+          echo "Stability:     $STABILITY"
+          echo "DEB version:   $DEB_VERSION"
+          echo "RPM version:   $RPM_VERSION"
+          echo "NSIS version:  $NSIS_VERSION"
+
+  # ============================================
+  # NSIS Windows 安装包
+  # ============================================
+  nsis:
+    name: NSIS Installer (Windows)
+    runs-on: windows-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      # 将版本号注入 installer.nsi
+      - name: Inject version into NSIS script
+        shell: bash
+        run: |
+          NSIS_VER="${{ needs.version.outputs.nsis_version }}"
+          # 提取主版本号部分（用于 VIProductVersion，格式为 X.Y.Z.W）
+          MAIN_VER=$(echo "$NSIS_VER" | sed -E 's/-.*//; s/^([0-9]+\.[0-9]+\.[0-9]+).*/\1.0/')
+
+          sed -i "s/VIPRODUCT_VERSION \"[^\"]*\"/VIPRODUCT_VERSION \"$MAIN_VER\"/" installer.nsi
+          sed -i "s/VIAddVersionKey \"FileVersion\" \"[^\"]*\"/VIAddVersionKey \"FileVersion\" \"$NSIS_VER\"/" installer.nsi
+          sed -i "s/OutFile \"[^\"]*\"/OutFile \"CursorFusion-${NSIS_VER}-Setup.exe\"/" installer.nsi
+          sed -i "s|Name \"[^\"]*\"|Name \"CursorFusion ${NSIS_VER}\"|" installer.nsi
+
+          echo "Injected NSIS version: $NSIS_VER (product: $MAIN_VER)"
+
+      # 安装 NSIS 编译器并编译
+      - name: Install NSIS
+        uses: joncloud/makensis-action@v4
+        with:
+          script-file: installer.nsi
+
+      - name: List output
+        shell: bash
+        run: ls -la *.exe 2>/dev/null || echo "No exe found in root"
+
+      - name: Upload NSIS installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursorfusion-${{ needs.version.outputs.version_no_v }}-setup.exe
+          path: |
+            CursorFusion-*-Setup.exe
+            *.exe
+          if-no-files-found: warn
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            CursorFusion-*-Setup.exe
+            *.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if-no-files-found: ignore
+
+  # ============================================
+  # Debian DEB 包
+  # ============================================
+  deb:
+    name: DEB Package (Linux)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      # 安装打包工具
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev fakeroot
+
+      # 创建 DEB 包目录结构
+      - name: Prepare DEB structure
+        run: |
+          DEB_DIR="pkg/deb/cursorfusion_${{ needs.version.outputs.deb_version }}_amd64"
+          mkdir -p "$DEB_DIR/DEBIAN"
+          mkdir -p "$DEB_DIR/opt/cursorfusion"
+          mkdir -p "$DEB_DIR/usr/bin"
+          mkdir -p "$DEB_DIR/usr/share/applications"
+          mkdir -p "$DEB_DIR/usr/share/icons/hicolor/256x256/apps"
+
+          # 复制构建产物
+          cp -r dist/* "$DEB_DIR/opt/cursorfusion/" 2>/dev/null || true
+          cp -r build/* "$DEB_DIR/opt/cursorfusion/" 2>/dev/null || true
+          cp -r src/* "$DEB_DIR/opt/cursorfusion/" 2>/dev/null || true
+          cp package.json "$DEB_DIR/opt/cursorfusion/"
+
+          # 创建启动脚本
+          cat > "$DEB_DIR/usr/bin/cursorfusion" << 'LAUNCHER'
+          #!/bin/bash
+          cd /opt/cursorfusion
+          exec node /opt/cursorfusion/index.js "$@"
+          LAUNCHER
+          chmod +x "$DEB_DIR/usr/bin/cursorfusion"
+
+          # 创建桌面入口文件
+          cat > "$DEB_DIR/usr/share/applications/cursorfusion.desktop" << DESKTOP
+          [Desktop Entry]
+          Name=CursorFusion
+          Comment=CursorFusion Application
+          Exec=/usr/bin/cursorfusion %F
+          Terminal=false
+          Type=Application
+          Categories=Development;Utility;
+          StartupWMClass=cursorfusion
+          DESKTOP
+
+      # 生成 control 文件
+      - name: Generate DEB control file
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name" 2>/dev/null | tr '-' '_' || echo "cursorfusion")
+          PKG_DESC=$(node -p -e "const p=require('./package.json'); p.description || 'CursorFusion Application'" 2>/dev/null | head -c 200)
+
+          cat > pkg/deb/cursorfusion_${{ needs.version.outputs.deb_version }}_amd64/DEBIAN/control << CONTROL
+          Package: ${PKG_NAME:-cursorfusion}
+          Version: ${{ needs.version.outputs.deb_version }}
+          Section: devel
+          Priority: optional
+          Architecture: amd64
+          Depends: nodejs (>= 18), libnss3, libatk-bridge2.0-0, libdrm2, libxkbcommon0, libgbm1, libasound2
+          Maintainer: LineCatOvO <${{ github.actor }}@users.noreply.github.com>
+          Description: ${PKG_DESC}
+           CursorFusion - A modern development tool.
+           .
+           This package contains the CursorFusion application.
+          Homepage: https://github.com/${{ github.repository }}
+          CONTROL
+
+          chmod 755 pkg/deb/cursorfusion_${{ needs.version.outputs.deb_version }}_amd64/DEBIAN
+          chmod 644 pkg/deb/cursorfusion_${{ needs.version.outputs.deb_version }}_amd64/DEBIAN/control
+
+      # 构建 DEB 包
+      - name: Build DEB package
+        run: |
+          fakeroot dpkg-deb --build \
+            pkg/deb/cursorfusion_${{ needs.version.outputs.deb_version }}_amd64 \
+            cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb
+
+          echo "=== DEB Package Info ==="
+          dpkg-deb --info cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb
+          echo ""
+          echo "=== Contents (top 20) ==="
+          dpkg-deb --contents cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb | head -20
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursorfusion-${{ needs.version.outputs.version_no_v }}-amd64.deb
+          path: cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cursorfusion_${{ needs.version.outputs.deb_version }}_amd64.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # RPM 包（可选）
+  # ============================================
+  rpm:
+    name: RPM Package (Linux)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Prepare RPM structure
+        run: |
+          mkdir -p pkg/rpm/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion
+          mkdir -p pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/usr/bin
+
+          cp -r dist/* pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/ 2>/dev/null || true
+          cp -r build/* pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/ 2>/dev/null || true
+          cp package.json pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/opt/cursorfusion/
+
+          cat > pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/usr/bin/cursorfusion << 'LAUNCHER'
+          #!/bin/bash
+          cd /opt/cursorfusion
+          exec node /opt/cursorfusion/index.js "$@"
+          LAUNCHER
+          chmod +x pkg/rpm/SOURCES/cursorfusion-${{ needs.version.outputs.rpm_version }}/usr/bin/cursorfusion
+
+          cd pkg/rpm/SOURCES
+          tar czf cursorfusion-${{ needs.version.outputs.rpm_version }}.tar.gz cursorfusion-${{ needs.version.outputs.rpm_version }}/
+
+      - name: Generate RPM spec file
+        run: |
+          PKG_DESC=$(node -p -e "const p=require('./package.json'); p.description || 'CursorFusion Application'" 2>/dev/null)
+
+          cat > pkg/rpm/SPECS/cursorfusion.spec << SPEC
+          Name:           cursorfusion
+          Version:        ${{ needs.version.outputs.rpm_version }}
+          Release:        1%{?dist}
+          Summary:        CursorFusion Application
+          License:        AGPL-3.0
+          URL:            https://github.com/${{ github.repository }}
+          Source0:        cursorfusion-%{version}.tar.gz
+
+          Requires:       nodejs >= 18
+
+          %description
+          ${PKG_DESC}
+
+          %prep
+          %setup -q
+
+          %install
+          rm -rf %{buildroot}
+          mkdir -p %{buildroot}/opt/cursorfusion
+          mkdir -p %{buildroot}/usr/bin
+          cp -r * %{buildroot}/opt/cursorfusion/
+          install -m 0755 usr/bin/cursorfusion %{buildroot}/usr/bin/
+
+          %files
+          /opt/cursorfusion
+          /usr/bin/cursorfusion
+
+          %changelog
+          * $(date '+%a %b %d %Y') LineCatOvO <${{ github.actor }}@users.noreply.github.com> ${{ needs.version.outputs.rpm_version }}-1
+          - Initial package
+          SPEC
+
+      - name: Build RPM package
+        run: |
+          cd pkg/rpm
+          rpmbuild -ba SPECS/cursorfusion.spec \
+            --define "_topdir $(pwd)" \
+            --clean
+
+          cp RPMS/x86_64/cursorfusion-*.rpm ../cursorfusion-${{ needs.version.outputs.version_no_v }}.x86_64.rpm 2>/dev/null || true
+          ls -la RPMS/x86_64/ 2>/dev/null || echo "No RPM built"
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursorfusion-${{ needs.version.outputs.version_no_v }}.x86_64.rpm
+          path: cursorfusion-*.rpm
+          if-no-files-found: warn
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cursorfusion-*.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if-no-files-found: ignore

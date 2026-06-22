@@ -1,0 +1,272 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 v0.1.0-alpha.1，留空则使用最新 tag）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================
+  # 版本解析（共享步骤）
+  # ============================================
+  version:
+    name: Parse Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_no_v: ${{ steps.version.outputs.version_no_v }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      stability: ${{ steps.version.outputs.stability }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract & parse version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+
+          VERSION_NO_V="${VERSION#v}"
+
+          # 判断是否为预发布版本（含 alpha/beta/rc 等）
+          if echo "$VERSION_NO_V" | grep -qE "(alpha|beta|rc|dev|pre)"; then
+            IS_PRERELEASE="true"
+            # 提取稳定性标识
+            STABILITY=$(echo "$VERSION_NO_V" | grep -oE "^(alpha|beta|rc)" | head -1)
+          else
+            IS_PRERELEASE="false"
+            STABILITY="stable"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_no_v=$VERSION_NO_V" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "stability=$STABILITY" >> $GITHUB_OUTPUT
+
+          echo "=== Version Info ==="
+          echo "Version:       $VERSION"
+          echo "Version (no v): $VERSION_NO_V"
+          echo "Prerelease:    $IS_PRERELEASE"
+          echo "Stability:     $STABILITY"
+
+  # ============================================
+  # 构建 & 发布到 GitHub Releases
+  # ============================================
+  release:
+    name: Release (${{ needs.version.outputs.stability }})
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Package artifacts
+        run: |
+          tar -czvf cursorfusion-${{ needs.version.outputs.version_no_v }}.tar.gz dist/
+          zip -r cursorfusion-${{ needs.version.outputs.version_no_v }}.zip dist/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个 tag 用于生成变更日志
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREV_TAG}..HEAD)
+            COMPARE_URL="https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${{ needs.version.outputs.version }}"
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" HEAD)
+            COMPARE_URL=""
+          fi
+
+          {
+            echo 'changelog<<EOF'
+            echo "$CHANGELOG"
+            echo 'EOF'
+            echo "compare_url=$COMPARE_URL" >> $GITHUB_OUTPUT
+          }
+
+      # 创建 GitHub Release 并上传产物
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.version }}
+          name: "CursorFusion ${{ needs.version.outputs.version }}${{ needs.version.outputs.is_prerelease == 'true' && format(' ({0})', needs.version.outputs.stability) || '' }}"
+          body: |
+            ## CursorFusion ${{ needs.version.outputs.version }}
+
+            **阶段：** ${{ needs.version.outputs.is_prerelease == 'true' && format('🔧 {0} 预发布 — 仅用于测试，不建议用于生产环境', needs.version.outputs.stability) || '✅ 正式发布' }}
+
+            ### 📦 安装说明
+
+            #### Windows (NSIS 安装包)
+            下载 `CursorFusion-Setup.exe` 运行安装。
+
+            #### Debian / Ubuntu
+            \`\`\`bash
+            sudo dpkg -i cursorfusion_${{ needs.version.outputs.version_no_v }}_amd64.deb
+            sudo apt-get install -f  # 自动安装依赖
+            \`\`\`
+
+            #### 源码包
+            \`\`\`bash
+            # tar.gz
+            tar xzf cursorfusion-${{ needs.version.outputs.version_no_v }}.tar.gz
+            cd dist && npm install --production
+
+            # 或 zip
+            unzip cursorfusion-${{ needs.version.outputs.version_no_v }}.zip
+            cd dist && npm install --production
+            \`\`\`
+
+            ### 📝 变更日志
+            ${{ steps.changelog.outputs.changelog }}
+
+            ${{ steps.changelog.outputs.compare_url != '' && format('> 完整变更对比：[{0}]({1})', needs.version.outputs.version, steps.changelog.outputs.compare_url) || '' }}
+
+            ---
+            *此版本由 GitHub Actions 自动发布于 $(date '+%Y-%m-%d %H:%M UTC')*
+          draft: false
+          prerelease: ${{ needs.version.outputs.is_prerelease == 'true' }}
+          files: |
+            cursorfusion-${{ needs.version.outputs.version_no_v }}.tar.gz
+            cursorfusion-${{ needs.version.outputs.version_no_v }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # 跨平台二进制构建
+  # ============================================
+  build-binaries:
+    name: Build Binaries (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+            ext: ""
+          - os: macos-latest
+            target: darwin-x64
+            ext: ""
+          - os: macos-latest
+            target: darwin-arm64
+            ext: ""
+          - os: windows-latest
+            target: win32-x64
+            ext: ".exe"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build binaries
+        run: npm run pkg -- --targets ${{ matrix.target }} --output cursorfusion${{ matrix.ext }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cursorfusion-${{ needs.version.outputs.version_no_v }}-${{ matrix.target }}
+          path: cursorfusion${{ matrix.ext }}
+
+      - name: Upload binary to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cursorfusion${{ matrix.ext }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================
+  # Docker 镜像构建与推送
+  # ============================================
+  docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: version
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.version.outputs.is_prerelease == 'true' && format('{0}-{1}', needs.version.outputs.stability, needs.version.outputs.version_no_v) || needs.version.outputs.version_no_v }},enable=${{ needs.version.outputs.is_prerelease == 'true' }}
+            type=sha,prefix=
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_VERSION=${{ needs.version.outputs.version_no_v }}

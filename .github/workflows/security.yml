@@ -1,0 +1,46 @@
+name: CodeQL Security Scan
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # 每周一凌晨 3 点 UTC (北京时间 11:00) 运行全面扫描
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: write
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript", "python"]
+        # 可选: 如需分析其他语言，添加到列表中
+        # language: [ "javascript", "typescript", "python", "go" ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 初始化 CodeQL
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # 如果使用查询组合文件，取消下面的注释
+          # queries: +security-and-quality
+
+      # 自动构建（CodeQL 会自动检测项目类型）
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

@@ -1,0 +1,94 @@
+name: Issue & PR Automation
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+  pull_request_target:
+    types: [opened, edited, ready_for_review, review_requested]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  # ============================================
+  # 自动添加标签
+  # ============================================
+  labeler:
+    name: Auto Label
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Label new issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const context = github.context;
+            const labelsToAdd = [];
+
+            // 根据标题关键词自动分类
+            const title = context.payload.issue?.title || context.payload.pull_request?.title || "";
+            const body = context.payload.issue?.body || context.payload.pull_request?.body || "";
+
+            if (title.includes("bug") || title.includes("错误") || title.includes("崩溃")) {
+              labelsToAdd.push("bug");
+            }
+            if (title.includes("feature") || title.includes("功能") || title.includes("新增")) {
+              labelsToAdd.push("enhancement");
+            }
+            if (title.includes("doc") || title.includes("文档") || title.includes("说明")) {
+              labelsToAdd.push("documentation");
+            }
+
+            if (labelsToAdd.length > 0) {
+              if (context.eventName === 'issues') {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.issue.number,
+                  labels: labelsToAdd
+                });
+              } else if (context.eventName === 'pull_request_target') {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  labels: labelsToAdd
+                });
+              }
+            }
+
+            // 欢迎新贡献者
+            if (context.eventName === 'issues' && context.payload.issue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: `### 感谢你的反馈！🎉\n\n我们已收到你的 Issue，维护者会尽快查看并回复。\n\n在等待期间，请确认：\n- [ ] 已搜索过现有 [Issues](https://github.com/${{ github.repository }}/issues) 确认没有重复\n- [ ] 提供了足够的信息复现问题\n\n---\n*此评论由 GitHub Actions 自动生成*`
+              });
+            }
+
+  # ============================================
+  # 自动请求 Code Review
+  # ============================================
+  request-review:
+    name: Request Review
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'ready_for_review' &&
+      !github.event.pull_request.draft
+    steps:
+      - name: Request code review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              reviewers: ['LineCatOvO']
+            });

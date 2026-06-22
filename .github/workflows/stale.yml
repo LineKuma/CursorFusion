@@ -1,0 +1,66 @@
+name: Close Stale Issues and PRs
+
+on:
+  schedule:
+    # 每天北京时间 10:00 运行
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    name: Mark Stale
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for stale issues and PRs
+        uses: actions/stale@v9
+        with:
+          # Issue 配置
+          days-before-issue-stale: 30
+          days-before-issue-close: 14
+          stale-issue-label: "stale"
+          close-issue-label: "won't fix"
+          stale-issue-message: |
+            ### ⚠️ 此 Issue 已被标记为过期
+
+            由于过去 30 天内没有任何活动，此 Issue 被自动标记为 **stale**。
+
+            如果这仍然是一个需要解决的问题，请留言或进行任何操作来取消过期状态。
+
+            如果没有进一步活动，将在 14 天后自动关闭。
+          close-issue-message: |
+            ### 📌 此 Issue 已被关闭
+
+            由于长时间无活动，此 Issue 已被自动关闭。
+
+            如果需要重新开启，请新建一个 Issue 或联系维护者。
+
+          # PR 配置
+          days-before-pr-stale: 45
+          days-before-pr-close: 21
+          stale-pr-label: "stale"
+          close-pr-label: "won't fix"
+          stale-pr-message: |
+            ### ⚠️ 此 PR 已被标记为过期
+
+            由于过去 45 天内没有任何活动，此 PR 被自动标记为 **stale**。
+
+            如果仍在积极开发中，请留言或推送新的 commit 来取消过期状态。
+          close-pr-message: |
+            ### 📌 此 PR 已被关闭
+
+            由于长时间无活动，此 PR 已被自动关闭。
+
+            如果需要继续工作，请重新打开 PR 或创建一个新的分支。
+
+          # 通用配置
+          exempt-all-milestones: true
+          exempt-all-assignees: true
+          operations-per-run: 100
+          remove-stale-when-updated: true
+          # 不标记带有以下标签的 issue/pr
+          exempt-issue-labels: "pin,keep,good first issue,help wanted"
+          exempt-pr-labels: "pin,keep,wip,work in progress"
