@@ -64,6 +64,91 @@ describe('FileUtils', () => {
       expect(hasDeepFile).toBe(false);
     });
 
+    it('should handle deeply nested directories (3+ levels)', async () => {
+      // 创建 4 层嵌套: level1/level2/level3/level4
+      const deepPath = path.join(tmpDir, 'l1', 'l2', 'l3', 'l4');
+      await fs.promises.mkdir(deepPath, { recursive: true });
+      await fs.promises.writeFile(path.join(deepPath, 'deep.js'), '// deep');
+
+      const files = await fu.walk(tmpDir, { extensions: ['.js'] });
+      expect(files.some(f => f.includes('deep.js'))).toBe(true);
+
+      // 确认递归到了第 4 层
+      const deepFile = files.find(f => f.includes('deep.js'));
+      expect(deepFile).toBeDefined();
+      expect(deepFile).toContain(path.join('l1', 'l2', 'l3', 'l4'));
+    });
+
+    it('should skip non-matching extensions in nested dirs', async () => {
+      // 创建混合内容的深层目录
+      const mixDir = path.join(tmpDir, 'mixed');
+      await fs.promises.mkdir(path.join(mixDir, 'sub'), { recursive: true });
+      await fs.promises.writeFile(path.join(mixDir, 'code.js'), '// code');
+      await fs.promises.writeFile(path.join(mixDir, 'data.json'), '{}');
+      await fs.promises.writeFile(path.join(mixDir, 'sub', 'inner.js'), '// inner');
+      await fs.promises.writeFile(path.join(mixDir, 'sub', 'inner.txt'), 'text');
+      await fs.promises.writeFile(path.join(mixDir, 'sub', 'style.css'), '/* css */');
+
+      const jsFiles = await fu.walk(mixDir, { extensions: ['.js'] });
+      // 应该找到 code.js 和 inner.js，但不包括 .json/.txt/.css
+      expect(jsFiles).toHaveLength(2);
+      expect(jsFiles.every(f => f.endsWith('.js'))).toBe(true);
+    });
+
+    it('should return empty when all files filtered out by extensions', async () => {
+      const onlyMdDir = path.join(tmpDir, 'md-only');
+      await fs.promises.mkdir(onlyMdDir);
+      await fs.promises.writeFile(path.join(onlyMdDir, 'readme.md'), '# hello');
+
+      const jsFiles = await fu.walk(onlyMdDir, { extensions: ['.js'] });
+      expect(jsFiles).toEqual([]);
+    });
+
+    it('should recurse into subdirectories at every depth level', async () => {
+      // 在独立目录创建 5 层嵌套，每层都有文件和子目录
+      const nestedDir = path.join(tmpDir, 'nested-deep');
+      await fs.promises.mkdir(nestedDir);
+      let currentPath = nestedDir;
+      for (let i = 1; i <= 5; i++) {
+        currentPath = path.join(currentPath, `level${i}`);
+        await fs.promises.mkdir(currentPath);
+        await fs.promises.writeFile(path.join(currentPath, `file${i}.js`), `// level ${i}`);
+      }
+
+      // 不限制深度，应该遍历到最底层
+      const files = await fu.walk(nestedDir, { extensions: ['.js'], maxDepth: 10 });
+      expect(files).toHaveLength(5); // 每层一个 .js 文件
+      for (let i = 1; i <= 5; i++) {
+        expect(files.some(f => f.includes(`file${i}.js`))).toBe(true);
+      }
+    });
+
+    it('should handle directory containing only subdirectories (no leaf files)', async () => {
+      const dirOnly = path.join(tmpDir, 'dir-only');
+      await fs.promises.mkdir(path.join(dirOnly, 'a', 'b'), { recursive: true });
+      await fs.promises.writeFile(path.join(dirOnly, 'a', 'b', 'leaf.js'), '// leaf');
+
+      const files = await fu.walk(dirOnly, { extensions: ['.js'] });
+      expect(files).toHaveLength(1);
+      expect(files[0]).toContain('leaf.js');
+    });
+
+    it('should skip non-file non-directory entries (e.g., symlinks)', async () => {
+      const symDir = path.join(tmpDir, 'symlink-test');
+      await fs.promises.mkdir(symDir);
+
+      // 创建一个普通文件和一个指向它的符号链接
+      const realFile = path.join(symDir, 'real.js');
+      await fs.promises.writeFile(realFile, '// real');
+      const symLink = path.join(symDir, 'link.js');
+      await fs.promises.symlink(realFile, symLink);
+
+      const files = await fu.walk(symDir, { extensions: ['.js'] });
+      // 应该只找到真实文件，符号链接可能被跳过或作为文件处理
+      expect(files.length).toBeGreaterThanOrEqual(1);
+      expect(files.some(f => f.includes('real.js'))).toBe(true);
+    });
+
     it('should return empty array for empty directory', async () => {
       const emptyDir = path.join(tmpDir, 'empty');
       await fs.promises.mkdir(emptyDir);

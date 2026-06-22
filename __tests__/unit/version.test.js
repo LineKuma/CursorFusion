@@ -29,6 +29,22 @@ describe('VersionInfo', () => {
       expect(vi.version).toBe('0.0.0');
     });
 
+    it('should fallback to 0.0.0 when package.json has empty version', async () => {
+      const pkgPath = path.join(tmpDir, 'pkg-empty-ver.json');
+      await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '' }));
+
+      const vi = new VersionInfo(pkgPath);
+      expect(vi.version).toBe('0.0.0');
+    });
+
+    it('should handle package.json without version field', async () => {
+      const pkgPath = path.join(tmpDir, 'pkg-no-ver.json');
+      await fs.promises.writeFile(pkgPath, JSON.stringify({ name: 'no-version' }));
+
+      const vi = new VersionInfo(pkgPath);
+      expect(vi.version).toBe('0.0.0');
+    });
+
     it('should load prerelease versions', async () => {
       const pkgPath = path.join(tmpDir, 'package.json');
       await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '2.0.0-beta.1' }));
@@ -101,6 +117,30 @@ describe('VersionInfo', () => {
       expect(parsed.patch).toBe(0);
       expect(parsed.raw).toBe('abc');
     });
+
+    it('__innerParse should handle completely invalid strings', () => {
+      // 直接测试内部方法
+      const result = VersionInfo.__innerParse('not-a-version');
+      expect(result.major).toBe(0);
+      expect(result.minor).toBe(0);
+      expect(result.patch).toBe(0);
+      expect(result.prerelease).toBeNull();
+      expect(result.raw).toBe('not-a-version');
+    });
+
+    it('__innerParse should parse version without prerelease', () => {
+      const result = VersionInfo.__innerParse('3.2.1');
+      expect(result.major).toBe(3);
+      expect(result.minor).toBe(2);
+      expect(result.patch).toBe(1);
+      expect(result.prerelease).toBeNull();
+    });
+
+    it('__innerParse should parse v-prefixed version', () => {
+      const result = VersionInfo.__innerParse('v1.0.0');
+      expect(result.major).toBe(1);
+      expect(result.prerelease).toBeNull();
+    });
   });
 
   describe('isPrerelease()', () => {
@@ -167,6 +207,28 @@ describe('VersionInfo', () => {
 
       expect(vi.compare('1.0.0')).toBe(-1);
     });
+
+    it('should compare two different prereleases alphabetically', async () => {
+      // alpha < beta < rc (localeCompare)
+      const pkgPath = path.join(tmpDir, 'package.json');
+      await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '1.0.0-alpha.2' }));
+      const vi = new VersionInfo(pkgPath);
+
+      // alpha.2 < beta.1
+      expect(vi.compare('1.0.0-beta.1')).toBeLessThan(0);
+      // alpha.2 > alpha.1
+      expect(vi.compare('1.0.0-alpha.1')).toBeGreaterThan(0);
+      // beta.1 < rc.1
+      expect(vi.compare('1.0.0-rc.1')).toBeLessThan(0);
+    });
+
+    it('should return 0 for identical prereleases', async () => {
+      const pkgPath = path.join(tmpDir, 'package.json');
+      await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '1.0.0-beta.2' }));
+      const vi = new VersionInfo(pkgPath);
+
+      expect(vi.compare('1.0.0-beta.2')).toBe(0);
+    });
   });
 
   describe('satisfies()', () => {
@@ -204,6 +266,29 @@ describe('VersionInfo', () => {
         await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '2.0.0' }));
         expect(new VersionInfo(pkgPath).satisfies('>=1.0.0')).toBe(true);
         expect(new VersionInfo(pkgPath).satisfies('>=3.0.0')).toBe(false);
+      });
+
+      it('> should work', async () => {
+        const pkgPath = path.join(tmpDir, 'package.json');
+        await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '2.0.0' }));
+        expect(new VersionInfo(pkgPath).satisfies('>1.0.0')).toBe(true);
+        expect(new VersionInfo(pkgPath).satisfies('>2.0.0')).toBe(false);
+        expect(new VersionInfo(pkgPath).satisfies('>3.0.0')).toBe(false);
+      });
+
+      it('<= should work', async () => {
+        const pkgPath = path.join(tmpDir, 'package.json');
+        await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '1.5.0' }));
+        expect(new VersionInfo(pkgPath).satisfies('<=2.0.0')).toBe(true);
+        expect(new VersionInfo(pkgPath).satisfies('<=1.0.0')).toBe(false);
+      });
+
+      it('< should work', async () => {
+        const pkgPath = path.join(tmpDir, 'package.json');
+        await fs.promises.writeFile(pkgPath, JSON.stringify({ version: '1.5.0' }));
+        expect(new VersionInfo(pkgPath).satisfies('<2.0.0')).toBe(true);
+        expect(new VersionInfo(pkgPath).satisfies('<1.5.0')).toBe(false);
+        expect(new VersionInfo(pkgPath).satisfies('<1.0.0')).toBe(false);
       });
 
       it('exact match should work', async () => {
